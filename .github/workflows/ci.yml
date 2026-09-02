@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No dependencies to install — the app uses only the Node standard library.
+      - name: Run tests
+        run: node --test 'test/*.test.js'
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t unraid-reverse-proxy:ci .
+      - name: Boot it and check it answers
+        run: |
+          docker run -d --name ci -p 8080:80 -e HTTP_PORT=80 unraid-reverse-proxy:ci
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8080/healthz > /dev/null; then
+              echo "healthy after ${i}s"
+              curl -fsS http://127.0.0.1:8080/healthz
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "container never became healthy" >&2
+          docker logs ci >&2
+          exit 1

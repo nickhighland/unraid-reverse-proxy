@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>Unraid-Reverse-Proxy</Name>
-  <Repository>ghcr.io/YOUR-GITHUB-USER/unraid-reverse-proxy:latest</Repository>
-  <Registry>https://ghcr.io/YOUR-GITHUB-USER/unraid-reverse-proxy</Registry>
+  <Repository>ghcr.io/nickhighland/unraid-reverse-proxy:latest</Repository>
+  <Registry>https://ghcr.io/nickhighland/unraid-reverse-proxy</Registry>
   <Branch>
     <Tag>latest</Tag>
     <TagDescription>Current release</TagDescription>
@@ -11,8 +11,8 @@
   <MyIP/>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
-  <Support>https://github.com/YOUR-GITHUB-USER/unraid-reverse-proxy/issues</Support>
-  <Project>https://github.com/YOUR-GITHUB-USER/unraid-reverse-proxy</Project>
+  <Support>https://github.com/nickhighland/unraid-reverse-proxy/issues</Support>
+  <Project>https://github.com/nickhighland/unraid-reverse-proxy</Project>
   <Overview>
     Give every Docker container on your server a friendly name.
 
@@ -31,7 +31,7 @@
   </Overview>
   <Category>Network:Web Network:DNS Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:80]/</WebUI>
-  <Icon>https://raw.githubusercontent.com/YOUR-GITHUB-USER/unraid-reverse-proxy/main/branding/icon.png</Icon>
+  <Icon>https://raw.githubusercontent.com/nickhighland/unraid-reverse-proxy/main/branding/icon.png</Icon>
   <ExtraParams></ExtraParams>
   <PostArgs></PostArgs>
   <DonateText/>

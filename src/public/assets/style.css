@@ -506,3 +506,44 @@ details.advanced[open] summary::before { content: "▾ "; }
 }
 
 .picker-backdrop { z-index: 60; }
+
+/* ---------- domain suffix editor ---------- */
+
+.suffix-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.suffix-list:empty { display: none; }
+
+.suffix-row {
+  display: flex; align-items: flex-start; gap: 11px;
+  padding: 11px 13px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.suffix-row.primary { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+
+.suffix-name { font: 600 13.5px var(--mono); flex: none; padding-top: 1px; }
+.suffix-body { flex: 1; min-width: 0; }
+.suffix-note { font-size: 12.5px; color: var(--faint); margin-top: 3px; line-height: 1.45; }
+.suffix-warn { font-size: 12.5px; color: var(--warn); margin-top: 5px; line-height: 1.45; }
+.suffix-actions { display: flex; gap: 5px; flex: none; }
+
+.pill {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+}
+.pill.mdns { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.pill.dns { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.pill.primary { background: var(--accent-soft); color: var(--accent); }
+
+.suffix-add { display: flex; gap: 9px; }
+.suffix-add .input { flex: 1; }
+
+.dns-record {
+  font: 12.5px var(--mono);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  margin-top: 7px;
+  display: inline-block;
+}

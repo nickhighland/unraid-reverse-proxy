@@ -34,14 +34,34 @@ const health = new HealthMonitor(() => config.load().services, {
 });
 const mdns = new MdnsResponder({ logger });
 
+/** Every name this proxy answers to, across every configured suffix. */
+function allNames(current = config.load()) {
+  const names = [];
+  for (const service of current.services) {
+    if (service.enabled) names.push(...config.allFqdns(service, current));
+  }
+  names.push(...config.allAdminFqdns(current));
+  return names;
+}
+
+/**
+ * mDNS is defined for the .local domain only (RFC 6762 §3). Clients never send
+ * queries for other suffixes to the multicast group, so advertising them would
+ * be dead traffic — those names need a record in a real DNS server instead.
+ */
+function mdnsNames(current = config.load()) {
+  return allNames(current).filter((name) => name.endsWith('.local'));
+}
+
+function dnsOnlyNames(current = config.load()) {
+  return allNames(current).filter((name) => !name.endsWith('.local'));
+}
+
 /** Recomputes everything that depends on the stored configuration. */
 function refresh() {
   const current = config.load();
   const ip = netinfo.advertiseIp(current.settings);
-  const names = current.services
-    .filter((s) => s.enabled)
-    .map((s) => config.fqdn(s, current));
-  names.push(config.adminFqdn(current));
+  const names = mdnsNames(current);
 
   if (current.settings.mdnsEnabled) {
     if (!mdns.running && !mdns.socket) {
@@ -69,6 +89,12 @@ function systemInfo() {
       running: mdns.running,
       names: mdns.names,
     },
+    suffixes: config.suffixes(current),
+    // Names that will not resolve until a DNS record points them here.
+    dnsOnlyNames: dnsOnlyNames(current),
+    wildcardRecords: config.suffixes(current)
+      .filter((suffix) => suffix !== 'local')
+      .map((suffix) => ({ record: `*.${suffix}`, target: netinfo.advertiseIp(current.settings) })),
     bridgeWarning: netinfo.looksLikeDockerBridge(netinfo.advertiseIp(current.settings)),
     httpPort,
     configFile: config.CONFIG_FILE,
@@ -82,8 +108,7 @@ function resolveService(hostHeader) {
   const current = config.load();
   const host = String(hostHeader || '').split(':')[0].toLowerCase().replace(/\.$/, '');
   if (!host) return null;
-  const suffix = `.${current.settings.domainSuffix}`;
-  const label = host.endsWith(suffix) ? host.slice(0, -suffix.length) : host;
+  const label = config.stripSuffix(host, current);
   if (label === current.settings.adminHostname) return null;
   const service = current.services.find((s) => s.hostname === label && s.enabled);
   return service || null;
@@ -92,9 +117,11 @@ function resolveService(hostHeader) {
 function isOurHost(hostHeader) {
   const current = config.load();
   const host = String(hostHeader || '').split(':')[0].toLowerCase().replace(/\.$/, '');
-  const suffix = `.${current.settings.domainSuffix}`;
-  return host === config.adminFqdn(current) || host === current.settings.adminHostname
-    || !host.endsWith(suffix);
+  // Our own admin names, a bare hostname, an IP, or anything not using a
+  // suffix we manage — all land on the admin app rather than the proxy.
+  return config.allAdminFqdns(current).includes(host)
+    || host === current.settings.adminHostname
+    || !config.hasKnownSuffix(host, current);
 }
 
 function unmappedPage(hostHeader) {

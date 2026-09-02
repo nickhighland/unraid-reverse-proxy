@@ -267,3 +267,81 @@ test('the admin form has no duplicate element ids', () => {
   assert.deepEqual(duplicates, [], `duplicate form ids: ${duplicates.join(', ')}`);
   assert.ok(ids.length >= 12, `expected the full form to be scanned, found ${ids.length} ids`);
 });
+
+// --- multiple domain suffixes ---------------------------------------------
+
+test('a service answers on every configured suffix', async () => {
+  const saved = await request('/api/settings');
+  await request('/api/settings', {
+    method: 'PUT',
+    body: { ...saved.json.settings, domainSuffixes: ['local', 'home.arpa', 'lan'] },
+  });
+
+  for (const host of ['openwebui.local', 'openwebui.home.arpa', 'openwebui.lan']) {
+    const res = await request('/ping', { headers: { host } });
+    assert.equal(res.status, 200, `${host} should route`);
+    assert.equal(res.json.url, '/ping');
+  }
+
+  // A suffix that is not configured must not route.
+  const stranger = await request('/ping', { headers: { host: 'openwebui.example.com' } });
+  assert.notEqual(stranger.status, 200);
+});
+
+test('the admin panel is reachable on every suffix too', async () => {
+  for (const host of ['proxy.local', 'proxy.home.arpa', 'proxy.lan']) {
+    const res = await request('/healthz', { headers: { host } });
+    assert.equal(res.status, 200, `${host} should reach the admin app`);
+  }
+});
+
+test('services report all their names and urls', async () => {
+  const res = await request('/api/services');
+  const service = res.json.services.find((s) => s.hostname === 'openwebui');
+  assert.deepEqual(service.fqdns, ['openwebui.local', 'openwebui.home.arpa', 'openwebui.lan']);
+  assert.equal(service.fqdn, 'openwebui.local', 'primary suffix leads');
+  assert.equal(service.urls.length, 3);
+});
+
+test('mDNS claims only the .local names, and DNS-only names are reported', async () => {
+  const res = await request('/api/system');
+  const { mdns, dnsOnlyNames, wildcardRecords } = res.json;
+
+  assert.ok(mdns.names.length > 0);
+  for (const name of mdns.names) {
+    assert.ok(name.endsWith('.local'), `mDNS must not claim ${name}`);
+  }
+  assert.ok(dnsOnlyNames.some((n) => n.endsWith('.home.arpa')));
+  assert.ok(dnsOnlyNames.every((n) => !n.endsWith('.local')));
+
+  assert.deepEqual(
+    wildcardRecords.map((r) => r.record).sort(),
+    ['*.home.arpa', '*.lan'],
+    'the UI is told exactly which wildcard records to create',
+  );
+});
+
+test('an invalid suffix list is rejected without changing anything', async () => {
+  const before = await request('/api/settings');
+  const bad = await request('/api/settings', {
+    method: 'PUT',
+    body: { ...before.json.settings, domainSuffixes: ['local', 'not a suffix'] },
+  });
+  assert.equal(bad.status, 400);
+
+  const after = await request('/api/settings');
+  assert.deepEqual(after.json.settings.domainSuffixes, before.json.settings.domainSuffixes);
+});
+
+test('suffix guidance is served for the settings UI', async () => {
+  const res = await request('/api/settings');
+  const local = res.json.suffixInfo.find((i) => i.suffix === 'local');
+  assert.equal(local.resolves, 'mdns');
+  const arpa = res.json.suffixInfo.find((i) => i.suffix === 'home.arpa');
+  assert.equal(arpa.resolves, 'dns');
+  assert.ok(res.json.suffixSuggestions.length >= 4);
+
+  const risky = await request('/api/suffix-check?suffix=dev');
+  assert.equal(risky.json.ok, true);
+  assert.match(risky.json.warning, /HSTS/);
+});

@@ -389,11 +389,111 @@ document.getElementById('addService').addEventListener('click', () => openModal(
 
 const settingsFields = {
   dashboardTitle: 'dashboardTitle',
-  domainSuffix: 'domainSuffix',
   adminHostname: 'adminHostname',
   advertiseIp: 'advertiseIp',
   healthCheckSeconds: 'healthCheckSeconds',
 };
+
+// Working copy of the suffix list; committed when Save settings is pressed.
+let draftSuffixes = ['local'];
+let suffixInfo = [];
+
+function renderSuffixes() {
+  const list = document.getElementById('suffixList');
+  list.replaceChildren();
+
+  draftSuffixes.forEach((suffix, index) => {
+    const info = suffixInfo.find((i) => i.suffix === suffix) || { resolves: 'dns', note: '', label: '' };
+    const isPrimary = index === 0;
+
+    const pills = [
+      isPrimary ? el('span', { class: 'pill primary', text: 'primary' }) : null,
+      el('span', {
+        class: `pill ${info.resolves === 'mdns' ? 'mdns' : 'dns'}`,
+        text: info.resolves === 'mdns' ? 'resolves itself' : 'needs DNS',
+      }),
+    ];
+
+    const body = [
+      el('div', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap' }, [
+        el('span', { class: 'suffix-name', text: `.${suffix}` }),
+        ...pills,
+      ]),
+      el('div', { class: 'suffix-note', text: info.note || '' }),
+    ];
+    if (info.resolves !== 'mdns') {
+      body.push(el('div', {
+        class: 'dns-record',
+        text: `*.${suffix}   A   ${systemIp()}`,
+      }));
+    }
+    if (info.warning) body.push(el('div', { class: 'suffix-warn', text: `⚠ ${info.warning}` }));
+
+    const actions = [];
+    if (!isPrimary) {
+      actions.push(el('button', {
+        class: 'btn btn-sm', type: 'button', title: 'Use for links and the dashboard',
+        onclick: () => {
+          draftSuffixes.splice(index, 1);
+          draftSuffixes.unshift(suffix);
+          renderSuffixes();
+        },
+      }, ['Make primary']));
+    }
+    actions.push(el('button', {
+      class: 'btn btn-sm btn-danger', type: 'button',
+      disabled: draftSuffixes.length === 1 ? 'disabled' : null,
+      title: draftSuffixes.length === 1 ? 'At least one suffix is required' : 'Remove',
+      onclick: () => {
+        if (draftSuffixes.length === 1) return;
+        draftSuffixes.splice(index, 1);
+        renderSuffixes();
+      },
+    }, ['Remove']));
+
+    list.appendChild(el('div', { class: `suffix-row${isPrimary ? ' primary' : ''}` }, [
+      el('div', { class: 'suffix-body' }, body),
+      el('div', { class: 'suffix-actions' }, actions),
+    ]));
+  });
+
+  document.getElementById('adminSuffix').textContent = `.${draftSuffixes[0]}`;
+}
+
+function systemIp() {
+  return state.system?.advertiseIp || '<proxy IP>';
+}
+
+async function addSuffix() {
+  const input = document.getElementById('suffixInput');
+  const preview = document.getElementById('suffixPreview');
+  const value = input.value.trim();
+  if (!value) return;
+  try {
+    const info = await api(`/api/suffix-check?suffix=${encodeURIComponent(value)}`);
+    if (!info.ok) {
+      preview.textContent = info.error;
+      preview.className = 'notice error';
+      preview.hidden = false;
+      return;
+    }
+    if (draftSuffixes.includes(info.suffix)) {
+      preview.textContent = `.${info.suffix} is already in the list.`;
+      preview.className = 'notice info';
+      preview.hidden = false;
+      return;
+    }
+    draftSuffixes.push(info.suffix);
+    suffixInfo = [...suffixInfo.filter((i) => i.suffix !== info.suffix), info];
+    input.value = '';
+    preview.hidden = true;
+    renderSuffixes();
+  } catch (err) {
+    preview.textContent = err.message;
+    preview.className = 'notice error';
+    preview.hidden = false;
+  }
+}
 
 function fillSettings() {
   for (const [key, id] of Object.entries(settingsFields)) {
@@ -401,11 +501,16 @@ function fillSettings() {
   }
   document.getElementById('mdnsEnabled').checked = state.settings.mdnsEnabled !== false;
   document.getElementById('dashboardRequiresLogin').checked = state.settings.dashboardRequiresLogin === true;
-  document.getElementById('adminSuffix').textContent = `.${state.settings.domainSuffix}`;
+  draftSuffixes = [...(state.settings.domainSuffixes || ['local'])];
+  renderSuffixes();
 }
 
-document.getElementById('domainSuffix').addEventListener('input', (event) => {
-  document.getElementById('adminSuffix').textContent = `.${event.target.value || 'local'}`;
+document.getElementById('addSuffix').addEventListener('click', addSuffix);
+document.getElementById('suffixInput').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    addSuffix();
+  }
 });
 
 document.getElementById('saveSettings').addEventListener('click', async (event) => {
@@ -415,7 +520,7 @@ document.getElementById('saveSettings').addEventListener('click', async (event) 
   try {
     const payload = {
       dashboardTitle: document.getElementById('dashboardTitle').value,
-      domainSuffix: document.getElementById('domainSuffix').value,
+      domainSuffixes: draftSuffixes,
       adminHostname: document.getElementById('adminHostname').value,
       advertiseIp: document.getElementById('advertiseIp').value.trim() || 'auto',
       healthCheckSeconds: Number(document.getElementById('healthCheckSeconds').value),
@@ -424,7 +529,8 @@ document.getElementById('saveSettings').addEventListener('click', async (event) 
     };
     const result = await api('/api/settings', { method: 'PUT', body: payload });
     state.settings = result.settings;
-    state.suffix = result.settings.domainSuffix;
+    suffixInfo = result.suffixInfo || suffixInfo;
+    state.suffix = result.settings.domainSuffixes[0];
     fillSettings();
     notice.hidden = true;
     toast('Settings saved', 'ok');
@@ -529,6 +635,10 @@ async function loadSystem() {
     const hint = document.getElementById('advertiseHint');
     hint.textContent = `The address clients are told to connect to. Auto-detected: ${info.detectedIp}.`;
 
+    // The suffix rows quote the proxy's IP in their DNS records, and the system
+    // info usually lands after they first render.
+    if (document.getElementById('suffixList').children.length) renderSuffixes();
+
     const banner = document.getElementById('bridgeWarning');
     if (info.bridgeWarning) {
       banner.innerHTML = '';
@@ -566,7 +676,14 @@ async function loadServices() {
 async function loadSettings() {
   const data = await api('/api/settings');
   state.settings = data.settings;
-  state.suffix = data.settings.domainSuffix;
+  suffixInfo = [...(data.suffixInfo || []), ...(data.suffixSuggestions || [])];
+  state.suffix = (data.settings.domainSuffixes || ['local'])[0];
+
+  const options = document.getElementById('suffixOptions');
+  options.replaceChildren();
+  for (const item of data.suffixSuggestions || []) {
+    options.appendChild(el('option', { value: item.suffix, label: item.label }));
+  }
   fillSettings();
 }
 

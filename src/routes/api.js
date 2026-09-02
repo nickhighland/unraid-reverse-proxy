@@ -4,10 +4,11 @@ const config = require('../lib/config');
 const auth = require('../lib/auth');
 const { probe } = require('../lib/health');
 const icons = require('../lib/icons');
+const suffixLib = require('../lib/suffixes');
 const { sendJson, readJson, readBody } = require('../lib/http-util');
 
 const SETTING_KEYS = [
-  'domainSuffix', 'adminHostname', 'advertiseIp', 'mdnsEnabled',
+  'domainSuffixes', 'adminHostname', 'advertiseIp', 'mdnsEnabled',
   'dashboardRequiresLogin', 'dashboardTitle', 'healthCheckSeconds', 'httpPort',
 ];
 
@@ -15,7 +16,9 @@ function serviceForAdmin(service, cfg, health) {
   return {
     ...service,
     fqdn: config.fqdn(service, cfg),
+    fqdns: config.allFqdns(service, cfg),
     url: config.publicUrl(service, cfg),
+    urls: config.publicUrls(service, cfg),
     status: health.get(service.id),
   };
 }
@@ -29,7 +32,9 @@ function serviceForPublic(service, cfg, health) {
     icon: service.icon,
     color: service.color,
     fqdn: config.fqdn(service, cfg),
+    fqdns: config.allFqdns(service, cfg),
     url: config.publicUrl(service, cfg),
+    urls: config.publicUrls(service, cfg),
     status: state ? { up: state.up, latencyMs: state.latencyMs, checkedAt: state.checkedAt } : null,
   };
 }
@@ -54,7 +59,8 @@ async function handleApi(req, res, ctx) {
       username: authenticated ? cfg.auth.username : null,
       dashboardRequiresLogin: cfg.settings.dashboardRequiresLogin,
       dashboardTitle: cfg.settings.dashboardTitle,
-      domainSuffix: cfg.settings.domainSuffix,
+      domainSuffixes: config.suffixes(cfg),
+      domainSuffix: config.primarySuffix(cfg),
     });
   }
 
@@ -243,7 +249,19 @@ async function handleApi(req, res, ctx) {
   // --- settings & backup ----------------------------------------------
   if (pathname === '/api/settings' && method === 'GET') {
     if (requireAuth()) return undefined;
-    return sendJson(res, 200, { settings: cfg.settings });
+    return sendJson(res, 200, {
+      settings: cfg.settings,
+      suffixInfo: config.suffixes(cfg).map(suffixLib.describe),
+      suffixSuggestions: suffixLib.SUGGESTIONS.map(suffixLib.describe),
+    });
+  }
+
+  // Lets the settings UI preview a suffix before it is saved.
+  if (pathname === '/api/suffix-check' && method === 'GET') {
+    if (requireAuth()) return undefined;
+    const candidate = suffixLib.validate(url.searchParams.get('suffix') || '');
+    if (!candidate.ok) return sendJson(res, 200, { ok: false, error: candidate.error });
+    return sendJson(res, 200, { ok: true, ...suffixLib.describe(candidate.suffix) });
   }
 
   if (pathname === '/api/settings' && (method === 'PUT' || method === 'PATCH')) {
@@ -255,10 +273,10 @@ async function handleApi(req, res, ctx) {
       next[key] = body[key];
     }
 
-    next.domainSuffix = String(next.domainSuffix || 'local').trim().toLowerCase().replace(/^\.+|\.+$/g, '');
-    if (!/^[a-z0-9][a-z0-9-.]*$/.test(next.domainSuffix)) {
-      return sendJson(res, 400, { error: 'Domain suffix must be a valid DNS label, e.g. "local".' });
-    }
+    const suffixResult = suffixLib.validateList(next.domainSuffixes ?? config.suffixes(cfg));
+    if (!suffixResult.ok) return sendJson(res, 400, { error: suffixResult.error });
+    next.domainSuffixes = suffixResult.suffixes;
+    delete next.domainSuffix;
     next.adminHostname = String(next.adminHostname || 'proxy').trim().toLowerCase();
     if (!config.HOSTNAME_RE.test(next.adminHostname)) {
       return sendJson(res, 400, { error: 'Admin hostname must be a valid DNS label.' });
@@ -283,7 +301,11 @@ async function handleApi(req, res, ctx) {
     cfg.settings = next;
     config.save();
     ctx.refresh();
-    return sendJson(res, 200, { settings: cfg.settings, restartRequired: portChanged });
+    return sendJson(res, 200, {
+      settings: cfg.settings,
+      suffixInfo: config.suffixes(cfg).map(suffixLib.describe),
+      restartRequired: portChanged,
+    });
   }
 
   if (pathname === '/api/export' && method === 'GET') {

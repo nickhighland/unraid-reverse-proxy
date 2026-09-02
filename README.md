@@ -91,7 +91,7 @@ the admin panel's System tab. That warning is not cosmetic; nothing will work un
 7. Add your first service and open `http://<hostname>.local`.
 
 The template in [`unraid/unraid-reverse-proxy.xml`](unraid/unraid-reverse-proxy.xml) has
-`YOUR-GITHUB-USER` placeholders — replace them with wherever you publish the image and icon.
+`nickhighland` placeholders — replace them with wherever you publish the image and icon.
 
 ### Running it anywhere else
 
@@ -144,7 +144,55 @@ Defaults are right for almost everything; open **Advanced** if something misbeha
 
 ---
 
-## Client support for `.local`
+## Domain suffixes
+
+`.local` is the default, not the only option. **Settings → Domain suffixes** takes a list, and
+every service answers on all of them at once — `plex.local`, `plex.home.arpa` and `plex.lan` can
+all reach the same container. The first suffix in the list is the "primary": it is what the
+dashboard links to and what the admin panel displays.
+
+There is one thing that makes `.local` special:
+
+> **Only `.local` resolves by itself.** mDNS is defined for the `.local` domain and nothing else
+> ([RFC 6762 §3](https://www.rfc-editor.org/rfc/rfc6762#section-3)). Clients never send lookups for
+> other suffixes to the multicast group, so the responder deliberately only claims `.local` names.
+
+Every other suffix works exactly as well for routing — the proxy matches the `Host` header either
+way — but something has to answer the name lookup. That is **one wildcard record**, not one per
+service. The settings screen shows you the exact record to create:
+
+```
+*.home.arpa   A   192.168.254.20
+```
+
+Add that in Pi-hole (Local DNS → DNS Records), AdGuard Home (Filters → DNS rewrites), or your
+router, and every service you ever add is covered without touching DNS again.
+
+### Choosing one
+
+| Suffix | Resolves itself | Notes |
+|---|---|---|
+| `local` | **Yes**, via mDNS | Zero setup. Android support is inconsistent. |
+| `home.arpa` | No | Reserved for home networks by [RFC 8375](https://www.rfc-editor.org/rfc/rfc8375). The formally correct choice. |
+| `internal` | No | Reserved for private use by ICANN in 2024. Safe and short. |
+| `lan`, `home`, `box` | No | Common conventions, not delegated publicly. Fine in practice. |
+| `dev`, `app`, `zip`, `mov` | No | **Do not use.** See below. |
+
+A practical combination is `local` primary with `home.arpa` alongside: Apple and Windows machines
+get zero-config names, and anything with patchy mDNS (Android, some IoT devices) uses the DNS
+suffix instead.
+
+### Suffixes to avoid
+
+`.dev`, `.app`, `.zip`, `.mov`, `.page` and the rest of Google's TLDs are on the
+[HSTS preload list](https://hstspreload.org/) — **browsers force HTTPS on the entire zone before a
+request is even sent**. A plain-HTTP proxy on those names cannot work, and no amount of
+configuration will fix it. The app warns you if you try.
+
+Inventing a suffix like `.nas` also works today but is a bet that it never becomes a real TLD.
+`.internal` and `.home.arpa` exist precisely so you do not have to make that bet.
+
+### Client support for `.local`
 
 | Platform | Works out of the box? |
 |---|---|
@@ -153,11 +201,6 @@ Defaults are right for almost everything; open **Advanced** if something misbeha
 | Linux | Yes, if `avahi-daemon` / `nss-mdns` is installed (most desktops ship it) |
 | Android | **Partial** — Chrome on Android resolves `.local` inconsistently |
 | Older Windows | Needs Apple Bonjour installed |
-
-For Android, or if you would rather not rely on mDNS, set **Domain suffix** in Settings to
-something like `home` or `lan` and add a single wildcard DNS record (`*.home → <proxy IP>`) in
-Pi-hole, AdGuard Home or your router. Everything else works identically — and unlike `.local`,
-those suffixes are safe to serve over unicast DNS.
 
 ---
 

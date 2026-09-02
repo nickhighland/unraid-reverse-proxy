@@ -50,21 +50,29 @@
         <input class="input" id="dashboardTitle" maxlength="60">
       </label>
 
-      <div class="row">
-        <label class="field">
-          <span class="label">Domain suffix</span>
-          <input class="input" id="domainSuffix" spellcheck="false">
-          <span class="hint">Use <code>local</code> unless you know you want something else.</span>
-        </label>
-        <label class="field">
-          <span class="label">Admin hostname</span>
-          <div class="suffixed">
-            <input class="input" id="adminHostname" spellcheck="false">
-            <span class="suffix" id="adminSuffix">.local</span>
-          </div>
-          <span class="hint">Where this panel lives.</span>
-        </label>
+      <div class="field">
+        <span class="label">Domain suffixes</span>
+        <div id="suffixList" class="suffix-list"></div>
+        <div class="suffix-add">
+          <input class="input" id="suffixInput" list="suffixOptions" spellcheck="false"
+                 placeholder="Add a suffix, e.g. home.arpa">
+          <datalist id="suffixOptions"></datalist>
+          <button class="btn" id="addSuffix" type="button">Add</button>
+        </div>
+        <div class="notice info" id="suffixPreview" hidden></div>
+        <span class="hint">
+          Every service answers on all of these. The first one is used for links and the dashboard.
+        </span>
       </div>
+
+      <label class="field">
+        <span class="label">Admin hostname</span>
+        <div class="suffixed">
+          <input class="input" id="adminHostname" spellcheck="false">
+          <span class="suffix" id="adminSuffix">.local</span>
+        </div>
+        <span class="hint">Where this panel lives.</span>
+      </label>
 
       <label class="field">
         <span class="label">Advertised IP address</span>

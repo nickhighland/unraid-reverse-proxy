@@ -14,7 +14,7 @@ function defaults() {
     version: 1,
     settings: {
       httpPort: Number(process.env.HTTP_PORT) || 80,
-      domainSuffix: 'local',
+      domainSuffixes: ['local'],
       adminHostname: 'proxy',
       advertiseIp: 'auto',
       mdnsEnabled: true,
@@ -52,7 +52,17 @@ function load() {
 
   const cfg = defaults();
   if (raw && typeof raw === 'object') {
-    Object.assign(cfg.settings, raw.settings || {});
+    const rawSettings = raw.settings || {};
+    Object.assign(cfg.settings, rawSettings);
+    // v1 stored a single `domainSuffix` string. Test the file rather than the
+    // merged object, whose domainSuffixes is already populated by defaults().
+    if (!Array.isArray(rawSettings.domainSuffixes) && typeof rawSettings.domainSuffix === 'string') {
+      cfg.settings.domainSuffixes = [rawSettings.domainSuffix];
+    }
+    delete cfg.settings.domainSuffix;
+    if (!Array.isArray(cfg.settings.domainSuffixes) || !cfg.settings.domainSuffixes.length) {
+      cfg.settings.domainSuffixes = ['local'];
+    }
     cfg.auth = raw.auth || null;
     cfg.sessionSecret = raw.sessionSecret || null;
     cfg.services = Array.isArray(raw.services) ? raw.services.map(normalizeService) : [];
@@ -111,15 +121,15 @@ function pickColor(seed) {
  */
 function validateService(input, existingId = null) {
   const cfg = load();
-  const suffix = cfg.settings.domainSuffix;
+  const suffix = primarySuffix(cfg);
 
   const name = String(input.name || '').trim();
   if (!name) return { ok: false, error: 'Name is required.' };
   if (name.length > 60) return { ok: false, error: 'Name must be 60 characters or fewer.' };
 
   // Accept "openwebui", "openwebui.local", or "OpenWebUI." — store just the label.
-  let hostname = String(input.hostname || '').trim().toLowerCase();
-  hostname = hostname.replace(new RegExp(`\\.${suffix}\\.?$`), '').replace(/\.$/, '');
+  // Accept "openwebui", "openwebui.local", "openwebui.home" — store just the label.
+  let hostname = stripSuffix(String(input.hostname || '').trim(), cfg).replace(/\.$/, '');
   if (!hostname) return { ok: false, error: 'Hostname is required.' };
   if (!HOSTNAME_RE.test(hostname)) {
     return { ok: false, error: 'Hostname may only contain letters, numbers and hyphens, and cannot start or end with a hyphen.' };
@@ -158,12 +168,46 @@ function validateService(input, existingId = null) {
   return { ok: true, service };
 }
 
+/** Every configured suffix, primary first. Never empty. */
+function suffixes(cfg = load()) {
+  const list = cfg.settings.domainSuffixes;
+  return Array.isArray(list) && list.length ? list : ['local'];
+}
+
+/** The suffix used for display and for the links on the dashboard. */
+function primarySuffix(cfg = load()) {
+  return suffixes(cfg)[0];
+}
+
 function fqdn(service, cfg = load()) {
-  return `${service.hostname}.${cfg.settings.domainSuffix}`;
+  return `${service.hostname}.${primarySuffix(cfg)}`;
+}
+
+/** Every name this service answers to, one per configured suffix. */
+function allFqdns(service, cfg = load()) {
+  return suffixes(cfg).map((suffix) => `${service.hostname}.${suffix}`);
 }
 
 function adminFqdn(cfg = load()) {
-  return `${cfg.settings.adminHostname}.${cfg.settings.domainSuffix}`;
+  return `${cfg.settings.adminHostname}.${primarySuffix(cfg)}`;
+}
+
+function allAdminFqdns(cfg = load()) {
+  return suffixes(cfg).map((suffix) => `${cfg.settings.adminHostname}.${suffix}`);
+}
+
+/** Strips whichever configured suffix a host ends with, returning the label. */
+function stripSuffix(host, cfg = load()) {
+  const clean = String(host || '').toLowerCase().replace(/\.$/, '');
+  for (const suffix of suffixes(cfg)) {
+    if (clean.endsWith(`.${suffix}`)) return clean.slice(0, -(suffix.length + 1));
+  }
+  return clean;
+}
+
+function hasKnownSuffix(host, cfg = load()) {
+  const clean = String(host || '').toLowerCase().replace(/\.$/, '');
+  return suffixes(cfg).some((suffix) => clean.endsWith(`.${suffix}`));
 }
 
 function publicUrl(service, cfg = load()) {
@@ -172,10 +216,24 @@ function publicUrl(service, cfg = load()) {
   return `http://${fqdn(service, cfg)}${suffix}/`;
 }
 
+/** One URL per configured suffix, in the same order. */
+function publicUrls(service, cfg = load()) {
+  const port = cfg.settings.httpPort;
+  const portPart = port === 80 ? '' : `:${port}`;
+  return allFqdns(service, cfg).map((name) => `http://${name}${portPart}/`);
+}
+
 module.exports = {
   CONFIG_DIR,
   CONFIG_FILE,
   HOSTNAME_RE,
+  suffixes,
+  primarySuffix,
+  allFqdns,
+  allAdminFqdns,
+  stripSuffix,
+  hasKnownSuffix,
+  publicUrls,
   load,
   save,
   normalizeService,
