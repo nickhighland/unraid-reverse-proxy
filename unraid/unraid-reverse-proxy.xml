@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Unraid-Reverse-Proxy</Name>
+  <Repository>ghcr.io/YOUR-GITHUB-USER/unraid-reverse-proxy:latest</Repository>
+  <Registry>https://ghcr.io/YOUR-GITHUB-USER/unraid-reverse-proxy</Registry>
+  <Branch>
+    <Tag>latest</Tag>
+    <TagDescription>Current release</TagDescription>
+  </Branch>
+  <Network>br0</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/YOUR-GITHUB-USER/unraid-reverse-proxy/issues</Support>
+  <Project>https://github.com/YOUR-GITHUB-USER/unraid-reverse-proxy</Project>
+  <Overview>
+    Give every Docker container on your server a friendly name.
+
+    Map 192.168.1.50:8080 to openwebui.local, 192.168.1.50:8989 to sonarr.local, and so on.
+    The container runs a reverse proxy that routes by hostname and an mDNS responder that
+    makes those .local names resolve on your LAN — no router, Pi-hole or hosts-file changes
+    needed on any client.
+
+    It also serves a launch screen listing every mapped service with a live up/down indicator,
+    plus a password-protected admin panel for managing the routes.
+
+    IMPORTANT: assign this container its own IP address on br0 (set Network Type to
+    "Custom: br0" and give it a Fixed IP outside your DHCP pool). The Unraid webGUI already
+    owns port 80 on the host, and the container needs its own IP to use port 80 and to
+    receive mDNS multicast traffic.
+  </Overview>
+  <Category>Network:Web Network:DNS Tools:Utilities</Category>
+  <WebUI>http://[IP]:[PORT:80]/</WebUI>
+  <Icon>https://raw.githubusercontent.com/YOUR-GITHUB-USER/unraid-reverse-proxy/main/branding/icon.png</Icon>
+  <ExtraParams></ExtraParams>
+  <PostArgs></PostArgs>
+  <DonateText/>
+  <DonateLink/>
+  <Description>
+    Reverse proxy plus mDNS responder that maps your Docker containers to .local hostnames,
+    with a dashboard and admin UI.
+  </Description>
+
+  <Config Name="Config Storage" Target="/config" Default="/mnt/user/appdata/unraid-reverse-proxy"
+          Mode="rw" Description="Stores config.json — your routes, settings and login."
+          Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/unraid-reverse-proxy</Config>
+
+  <Config Name="HTTP Port" Target="80" Default="80" Mode="tcp"
+          Description="Port the proxy and web UI listen on. Leave at 80 when the container has its own br0 IP."
+          Type="Port" Display="always" Required="true" Mask="false">80</Config>
+
+  <Config Name="mDNS Port" Target="5353" Default="5353" Mode="udp"
+          Description="Multicast DNS. Leave at 5353 — clients will not find .local names on any other port."
+          Type="Port" Display="advanced" Required="false" Mask="false">5353</Config>
+
+  <Config Name="HTTP_PORT" Target="HTTP_PORT" Default="80"
+          Description="Must match the HTTP Port above."
+          Type="Variable" Display="advanced" Required="false" Mask="false">80</Config>
+</Container>

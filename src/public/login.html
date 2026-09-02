@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="auth-wrap">
+  <form class="auth-card" id="form" autocomplete="on">
+    <div class="brand-mark" id="mark"></div>
+    <h1>Welcome back</h1>
+    <p>Sign in to manage your proxy routes.</p>
+
+    <div class="notice error" id="error" hidden></div>
+
+    <label class="field">
+      <span class="label">Username</span>
+      <input class="input" id="username" name="username" autocomplete="username" required autofocus>
+    </label>
+    <label class="field">
+      <span class="label">Password</span>
+      <input class="input" id="password" name="password" type="password" autocomplete="current-password" required>
+    </label>
+
+    <button class="btn btn-primary" id="submit" type="submit">Sign in</button>
+    <p style="text-align:center;margin:18px 0 0;font-size:13px">
+      <a href="/">← Back to the dashboard</a>
+    </p>
+  </form>
+</div>
+<script type="module" src="/assets/auth.js"></script>
+</body>
+</html>

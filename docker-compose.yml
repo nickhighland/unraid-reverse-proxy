@@ -1,0 +1,17 @@
+# Local development / non-Unraid hosts.
+#
+# On Unraid, prefer the Community Applications template in unraid/ and give the
+# container its own IP on br0 — the host's webGUI already owns port 80.
+services:
+  reverse-proxy:
+    build: .
+    container_name: unraid-reverse-proxy
+    restart: unless-stopped
+    # Host networking lets the container receive mDNS multicast and bind port 80
+    # directly. Swap for a macvlan network if port 80 is already taken.
+    network_mode: host
+    environment:
+      - HTTP_PORT=8088
+      - CONFIG_DIR=/config
+    volumes:
+      - ./data:/config

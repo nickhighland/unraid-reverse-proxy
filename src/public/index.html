@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Services</title>
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='19' font-size='19'>🔗</text></svg>">
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand" id="brand"></div>
+    <div class="spacer"></div>
+    <div class="search-wrap">
+      <span id="searchIcon"></span>
+      <input id="search" class="input" type="search" placeholder="Search services" autocomplete="off" spellcheck="false">
+      <span class="kbd">/</span>
+    </div>
+    <button id="newTabToggle" class="btn btn-sm" type="button" title="Toggle where links open"></button>
+    <a class="btn btn-sm" id="adminLink" href="/admin">Admin</a>
+  </header>
+
+  <main id="content">
+    <div class="grid" id="grid"></div>
+  </main>
+
+  <p class="foot" id="foot"></p>
+</div>
+<script type="module" src="/assets/dashboard.js"></script>
+</body>
+</html>

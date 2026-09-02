@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin · Unraid Reverse Proxy</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand" id="brand"></div>
+    <div class="spacer"></div>
+    <a class="btn btn-sm" href="/">Dashboard</a>
+    <button class="btn btn-sm btn-ghost" id="logout" type="button">Sign out</button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="services" type="button">Services</button>
+    <button class="tab" data-tab="settings" type="button">Settings</button>
+    <button class="tab" data-tab="system" type="button">System</button>
+  </nav>
+
+  <!-- Services -->
+  <section data-panel="services">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Mapped services</h2>
+          <p>Each entry turns a container's address into a friendly name on your LAN.</p>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn btn-primary" id="addService" type="button">+ Add service</button>
+      </div>
+      <div class="list" id="serviceList"></div>
+      <div id="serviceEmpty"></div>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section data-panel="settings" hidden>
+    <div class="panel">
+      <div class="panel-head">
+        <div><h2>General</h2><p>How the proxy presents itself on the network.</p></div>
+      </div>
+      <div class="notice info" id="settingsNotice" hidden></div>
+
+      <label class="field">
+        <span class="label">Dashboard title</span>
+        <input class="input" id="dashboardTitle" maxlength="60">
+      </label>
+
+      <div class="row">
+        <label class="field">
+          <span class="label">Domain suffix</span>
+          <input class="input" id="domainSuffix" spellcheck="false">
+          <span class="hint">Use <code>local</code> unless you know you want something else.</span>
+        </label>
+        <label class="field">
+          <span class="label">Admin hostname</span>
+          <div class="suffixed">
+            <input class="input" id="adminHostname" spellcheck="false">
+            <span class="suffix" id="adminSuffix">.local</span>
+          </div>
+          <span class="hint">Where this panel lives.</span>
+        </label>
+      </div>
+
+      <label class="field">
+        <span class="label">Advertised IP address</span>
+        <input class="input" id="advertiseIp" spellcheck="false" placeholder="auto">
+        <span class="hint" id="advertiseHint">The address clients are told to connect to.</span>
+      </label>
+
+      <label class="field">
+        <span class="label">Health check interval (seconds)</span>
+        <input class="input" id="healthCheckSeconds" type="number" min="5" max="600">
+      </label>
+
+      <label class="switch">
+        <input type="checkbox" id="mdnsEnabled">
+        <span class="switch-text">
+          <strong>Announce hostnames over mDNS</strong>
+          <small>Required for <code>.local</code> names to resolve without editing DNS anywhere else.</small>
+        </span>
+      </label>
+
+      <label class="switch">
+        <input type="checkbox" id="dashboardRequiresLogin">
+        <span class="switch-text">
+          <strong>Require sign-in for the dashboard</strong>
+          <small>Off by default so the link list is a one-click launcher on your LAN.</small>
+        </span>
+      </label>
+
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="saveSettings" type="button">Save settings</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><div><h2>Password</h2><p>Changing it signs out every other session.</p></div></div>
+      <div class="notice" id="passwordNotice" hidden></div>
+      <div class="row">
+        <label class="field">
+          <span class="label">Current password</span>
+          <input class="input" id="currentPassword" type="password" autocomplete="current-password">
+        </label>
+        <label class="field">
+          <span class="label">New password</span>
+          <input class="input" id="newPassword" type="password" autocomplete="new-password">
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="changePassword" type="button">Change password</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><div><h2>Backup</h2><p>Export your routes, or restore them on a fresh install.</p></div></div>
+      <div class="modal-actions" style="justify-content:flex-start">
+        <a class="btn" href="/api/export" download="unraid-proxy-backup.json">Export JSON</a>
+        <button class="btn" id="importBtn" type="button">Import JSON…</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+      </div>
+    </div>
+  </section>
+
+  <!-- System -->
+  <section data-panel="system" hidden>
+    <div class="panel">
+      <div class="panel-head"><div><h2>System</h2><p>What the proxy sees from inside its container.</p></div>
+        <div class="spacer"></div>
+        <button class="btn btn-sm" id="refreshSystem" type="button">Refresh</button>
+      </div>
+      <div class="notice error" id="bridgeWarning" hidden></div>
+      <div class="meta-grid" id="systemGrid"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><div><h2>Advertised names</h2><p>Names currently answered over mDNS.</p></div></div>
+      <div class="list" id="mdnsNames"></div>
+    </div>
+  </section>
+
+  <p class="foot" id="foot"></p>
+</div>
+
+<div id="modalRoot"></div>
+<script type="module" src="/assets/admin.js"></script>
+</body>
+</html>
