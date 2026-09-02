@@ -1,6 +1,6 @@
 {
   "name": "unraid-reverse-proxy",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "description": "Reverse proxy + mDNS responder that maps Unraid Docker containers to .local hostnames, with a dashboard and admin UI.",
   "main": "src/server.js",
   "scripts": {

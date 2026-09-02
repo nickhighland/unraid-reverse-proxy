@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.1.1
+
+Fixes the version string, which still reported 1.0.0 in the 1.1.0 image.
+
+## 1.1.0
+
+### Added
+
+- **Categories.** Services can be filed into groups, shown as collapsible headings on the
+  dashboard. Collapse state is per browser, so one viewer folding a group away does not fold it
+  away for everyone.
+- **Sorting.** Custom order, alphabetical, or by status (offline first). In custom order a
+  signed-in viewer can drag tiles on the dashboard itself — within a group to reorder, or onto
+  another group to refile. A drop sends order and category in one request, so a move never
+  half-applies.
+- **Appearance settings**: accent colour, forced light/dark or match-the-device, tiles or rows,
+  comfortable or compact density, three backgrounds, and toggles for status dots, hostnames and
+  descriptions.
+
+### Fixed
+
+- `/api/services/order` sat below the `/api/services/:id` matcher. Since `order` is alphanumeric
+  it was read as a service id and answered 404, so **drag-to-reorder had never persisted** since
+  1.0.0. It now precedes the matcher, with a regression test.
+- The light palette was defined only inside a `prefers-color-scheme` media query, so forcing a
+  light theme set the attribute and changed nothing. It is now also bound to `[data-theme]`.
+
 ## 1.0.0
 
 First release.
