@@ -8,7 +8,8 @@ const suffixLib = require('../lib/suffixes');
 const { sendJson, readJson, readBody } = require('../lib/http-util');
 
 const SETTING_KEYS = [
-  'domainSuffixes', 'adminHostname', 'advertiseIp', 'mdnsEnabled',
+  'domainSuffixes', 'adminHostname', 'advertiseIp', 'mdnsEnabled', 'appearance',
+  'dashboardSort', 'categoryOrder',
   'dashboardRequiresLogin', 'dashboardTitle', 'healthCheckSeconds', 'httpPort',
 ];
 
@@ -29,6 +30,7 @@ function serviceForPublic(service, cfg, health) {
     id: service.id,
     name: service.name,
     description: service.description,
+    category: service.category,
     icon: service.icon,
     color: service.color,
     fqdn: config.fqdn(service, cfg),
@@ -52,6 +54,26 @@ async function handleApi(req, res, ctx) {
   };
 
   // --- session ---------------------------------------------------------
+  // Everything the dashboard needs to render itself, login or not.
+  if (pathname === '/api/dashboard' && method === 'GET') {
+    if (!authenticated && cfg.settings.dashboardRequiresLogin) {
+      return sendJson(res, 401, { error: 'Not signed in.' });
+    }
+    const visible = authenticated
+      ? cfg.services
+      : cfg.services.filter((s) => s.enabled && s.showOnDashboard);
+    return sendJson(res, 200, {
+      title: cfg.settings.dashboardTitle,
+      appearance: cfg.settings.appearance,
+      sort: cfg.settings.dashboardSort,
+      categories: config.categories(cfg),
+      canEdit: authenticated,
+      services: visible.map((s) => (authenticated
+        ? serviceForAdmin(s, cfg, health)
+        : serviceForPublic(s, cfg, health))),
+    });
+  }
+
   if (pathname === '/api/session' && method === 'GET') {
     return sendJson(res, 200, {
       configured: auth.isConfigured(),
@@ -138,6 +160,28 @@ async function handleApi(req, res, ctx) {
     return sendJson(res, 201, { service: serviceForAdmin(result.service, cfg, health) });
   }
 
+  // Must precede the /:id matcher below: "order" is alphanumeric and would
+  // otherwise be read as a service id and 404.
+  if (pathname === '/api/services/order' && method === 'POST') {
+    if (requireAuth()) return undefined;
+    const body = await readJson(req);
+    const ids = Array.isArray(body.ids) ? body.ids : [];
+    // Dragging a tile into another group both reorders and recategorises.
+    if (body.categories && typeof body.categories === 'object') {
+      for (const service of cfg.services) {
+        if (Object.prototype.hasOwnProperty.call(body.categories, service.id)) {
+          service.category = String(body.categories[service.id] || '').trim().slice(0, 40);
+        }
+      }
+    }
+    const byId = new Map(cfg.services.map((s) => [s.id, s]));
+    const reordered = ids.map((id) => byId.get(id)).filter(Boolean);
+    for (const s of cfg.services) if (!ids.includes(s.id)) reordered.push(s);
+    cfg.services = reordered;
+    config.save();
+    return sendJson(res, 200, { ok: true });
+  }
+
   const serviceMatch = pathname.match(/^\/api\/services\/([A-Za-z0-9]+)$/);
   if (serviceMatch) {
     if (requireAuth()) return undefined;
@@ -162,18 +206,6 @@ async function handleApi(req, res, ctx) {
       return sendJson(res, 200, { service: serviceForAdmin(result.service, cfg, health) });
     }
     return sendJson(res, 405, { error: 'Method not allowed.' });
-  }
-
-  if (pathname === '/api/services/order' && method === 'POST') {
-    if (requireAuth()) return undefined;
-    const body = await readJson(req);
-    const ids = Array.isArray(body.ids) ? body.ids : [];
-    const byId = new Map(cfg.services.map((s) => [s.id, s]));
-    const reordered = ids.map((id) => byId.get(id)).filter(Boolean);
-    for (const s of cfg.services) if (!ids.includes(s.id)) reordered.push(s);
-    cfg.services = reordered;
-    config.save();
-    return sendJson(res, 200, { ok: true });
   }
 
   // --- status & diagnostics -------------------------------------------
@@ -292,6 +324,39 @@ async function handleApi(req, res, ctx) {
     next.mdnsEnabled = next.mdnsEnabled !== false;
     next.dashboardRequiresLogin = next.dashboardRequiresLogin === true;
     next.dashboardTitle = String(next.dashboardTitle || 'Unraid Services').trim().slice(0, 60) || 'Unraid Services';
+    const ALLOWED = {
+      theme: ['auto', 'dark', 'light'],
+      layout: ['grid', 'list'],
+      density: ['comfortable', 'compact'],
+      background: ['aurora', 'mesh', 'plain'],
+    };
+    const incoming = (body.appearance && typeof body.appearance === 'object') ? body.appearance : {};
+    const appearance = { ...cfg.settings.appearance };
+    for (const [key, values] of Object.entries(ALLOWED)) {
+      if (key in incoming) {
+        if (!values.includes(incoming[key])) {
+          return sendJson(res, 400, { error: `${key} must be one of: ${values.join(', ')}.` });
+        }
+        appearance[key] = incoming[key];
+      }
+    }
+    if ('accent' in incoming) {
+      if (!/^#[0-9a-fA-F]{6}$/.test(String(incoming.accent))) {
+        return sendJson(res, 400, { error: 'Accent must be a hex colour such as #4f8cff.' });
+      }
+      appearance.accent = String(incoming.accent).toLowerCase();
+    }
+    for (const flag of ['showStatus', 'showDescriptions', 'showHostnames', 'groupByCategory']) {
+      if (flag in incoming) appearance[flag] = incoming[flag] === true;
+    }
+    next.appearance = appearance;
+
+    const sorts = ['manual', 'name', 'status'];
+    next.dashboardSort = sorts.includes(next.dashboardSort) ? next.dashboardSort : cfg.settings.dashboardSort;
+    next.categoryOrder = Array.isArray(next.categoryOrder)
+      ? next.categoryOrder.map((c) => String(c).trim().slice(0, 40)).filter(Boolean).slice(0, 40)
+      : cfg.settings.categoryOrder;
+
     const interval = Number(next.healthCheckSeconds);
     next.healthCheckSeconds = Number.isFinite(interval) ? Math.min(600, Math.max(5, Math.round(interval))) : 30;
     const port = Number(next.httpPort);

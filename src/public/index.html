@@ -17,13 +17,16 @@
       <input id="search" class="input" type="search" placeholder="Search services" autocomplete="off" spellcheck="false">
       <span class="kbd">/</span>
     </div>
+    <select id="sortSelect" class="select select-sm" title="How tiles are ordered" hidden>
+      <option value="manual">Custom order</option>
+      <option value="name">By name</option>
+      <option value="status">By status</option>
+    </select>
     <button id="newTabToggle" class="btn btn-sm" type="button" title="Toggle where links open"></button>
     <a class="btn btn-sm" id="adminLink" href="/admin">Admin</a>
   </header>
 
-  <main id="content">
-    <div class="grid" id="grid"></div>
-  </main>
+  <main id="content"></main>
 
   <p class="foot" id="foot"></p>
 </div>

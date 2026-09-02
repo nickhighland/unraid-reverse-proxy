@@ -118,6 +118,33 @@ Click **+ Add service** and fill in three things:
 You can paste `192.168.254.254:8080` straight into the address box and the port splits out
 automatically. **Test connection** probes the address before you save.
 
+### Organising the dashboard
+
+Give each service a **Category** and the dashboard groups tiles under collapsible headings —
+Media, Downloads, Tools, whatever suits. Categories are created just by typing one; the field
+offers the ones you already use.
+
+The **sort control** in the header switches between your own custom order, alphabetical, and
+status (offline services first, so problems surface). In custom order, signed-in users can
+**drag tiles directly on the dashboard** — within a group to reorder, or onto another group's
+heading to refile. Group order itself is drag-sortable under Settings → Appearance.
+
+Collapsed groups are remembered per browser, so everyone can fold away the sections they do
+not use without affecting anyone else.
+
+### Appearance
+
+Settings → Appearance controls how the dashboard looks for everyone:
+
+| | |
+|---|---|
+| Accent colour | Any hex value, with eight presets |
+| Theme | Match the device, or force light or dark |
+| Layout | Tiles or full-width rows |
+| Density | Comfortable or compact |
+| Background | Aurora, mesh, or plain |
+| Toggles | Status dots, hostnames, descriptions, grouping |
+
 ### Icons
 
 **Browse library** searches the Unraid Community Applications catalogue — about 3,900 app icons,

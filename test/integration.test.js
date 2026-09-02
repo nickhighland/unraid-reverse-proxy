@@ -345,3 +345,121 @@ test('suffix guidance is served for the settings UI', async () => {
   assert.equal(risky.json.ok, true);
   assert.match(risky.json.warning, /HSTS/);
 });
+
+// --- categories, sorting and appearance ------------------------------------
+
+test('the dashboard endpoint serves everything needed to render', async () => {
+  const res = await request('/api/dashboard');
+  assert.equal(res.status, 200);
+  assert.ok(res.json.appearance, 'appearance is included');
+  assert.equal(res.json.appearance.accent, '#4f8cff');
+  assert.equal(res.json.canEdit, true, 'a signed-in caller may rearrange');
+  assert.ok(Array.isArray(res.json.categories));
+});
+
+test('a service can be filed under a category', async () => {
+  const list = await request('/api/services');
+  const service = list.json.services.find((s) => s.hostname === 'openwebui');
+  const res = await request(`/api/services/${service.id}`, {
+    method: 'PUT', body: { category: 'Media' },
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.service.category, 'Media');
+
+  const dash = await request('/api/dashboard');
+  assert.ok(dash.json.categories.includes('Media'));
+});
+
+test('reordering can move a service between categories in one call', async () => {
+  const list = await request('/api/services');
+  const service = list.json.services.find((s) => s.hostname === 'openwebui');
+  const ids = list.json.services.map((s) => s.id).reverse();
+
+  const res = await request('/api/services/order', {
+    method: 'POST',
+    body: { ids, categories: { [service.id]: 'Downloads' } },
+  });
+  assert.equal(res.status, 200);
+
+  const after = await request('/api/services');
+  assert.equal(after.json.services.find((s) => s.id === service.id).category, 'Downloads');
+  assert.equal(after.json.services[0].id, ids[0], 'order was applied too');
+});
+
+test('anonymous dashboard callers cannot rearrange', async () => {
+  const saved = cookie;
+  cookie = '';
+  const res = await request('/api/dashboard');
+  cookie = saved;
+  assert.equal(res.status, 200);
+  assert.equal(res.json.canEdit, false);
+});
+
+test('appearance settings round-trip', async () => {
+  const before = await request('/api/settings');
+  const res = await request('/api/settings', {
+    method: 'PUT',
+    body: {
+      ...before.json.settings,
+      dashboardSort: 'name',
+      appearance: {
+        accent: '#22C1A4', theme: 'dark', layout: 'list',
+        density: 'compact', background: 'mesh', showStatus: false,
+      },
+    },
+  });
+  assert.equal(res.status, 200);
+  const a = res.json.settings.appearance;
+  assert.equal(a.accent, '#22c1a4', 'hex is normalised to lower case');
+  assert.equal(a.theme, 'dark');
+  assert.equal(a.layout, 'list');
+  assert.equal(a.showStatus, false);
+  assert.equal(a.showHostnames, true, 'untouched flags keep their value');
+  assert.equal(res.json.settings.dashboardSort, 'name');
+});
+
+test('invalid appearance values are rejected, not silently coerced', async () => {
+  const before = await request('/api/settings');
+  for (const bad of [
+    { theme: 'neon' }, { layout: 'spiral' }, { density: 'airy' },
+    { background: 'lava' }, { accent: 'red' }, { accent: '#12345' },
+  ]) {
+    const res = await request('/api/settings', {
+      method: 'PUT', body: { ...before.json.settings, appearance: bad },
+    });
+    assert.equal(res.status, 400, `expected ${JSON.stringify(bad)} to be rejected`);
+  }
+  const after = await request('/api/settings');
+  assert.equal(after.json.settings.appearance.theme, before.json.settings.appearance.theme);
+});
+
+test('category order is stored and pruned to real categories', async () => {
+  const before = await request('/api/settings');
+  await request('/api/settings', {
+    method: 'PUT',
+    body: { ...before.json.settings, categoryOrder: ['Downloads', 'Media', 'Ghost'] },
+  });
+  const dash = await request('/api/dashboard');
+  // "Ghost" matches no service, so it must not appear in the rendered order.
+  assert.ok(!dash.json.categories.includes('Ghost'));
+  assert.equal(dash.json.categories[0], 'Downloads', 'stored order leads');
+});
+
+test('the /order route is not shadowed by the /:id route', async () => {
+  // "order" is alphanumeric, so a /api/services/:id matcher placed first will
+  // swallow it and 404. Reordering silently stopped persisting when it did.
+  const list = await request('/api/services');
+  const ids = list.json.services.map((s) => s.id);
+  const res = await request('/api/services/order', { method: 'POST', body: { ids } });
+  assert.equal(res.status, 200, '/api/services/order must reach its own handler');
+  assert.equal(res.json.ok, true);
+});
+
+test('reordering actually persists across a re-read', async () => {
+  const before = await request('/api/services');
+  const reversed = before.json.services.map((s) => s.id).reverse();
+  await request('/api/services/order', { method: 'POST', body: { ids: reversed } });
+
+  const after = await request('/api/services');
+  assert.deepEqual(after.json.services.map((s) => s.id), reversed);
+});

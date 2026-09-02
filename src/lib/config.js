@@ -20,6 +20,19 @@ function defaults() {
       mdnsEnabled: true,
       dashboardRequiresLogin: false,
       dashboardTitle: 'Unraid Services',
+      dashboardSort: 'manual',
+      categoryOrder: [],
+      appearance: {
+        accent: '#4f8cff',
+        theme: 'auto',
+        layout: 'grid',
+        density: 'comfortable',
+        background: 'aurora',
+        showStatus: true,
+        showDescriptions: true,
+        showHostnames: true,
+        groupByCategory: true,
+      },
       healthCheckSeconds: 30,
       sessionDays: 30,
     },
@@ -53,7 +66,11 @@ function load() {
   const cfg = defaults();
   if (raw && typeof raw === 'object') {
     const rawSettings = raw.settings || {};
+    const appearanceDefaults = cfg.settings.appearance;
     Object.assign(cfg.settings, rawSettings);
+    // Nested object: merge so a partial stored value keeps the new defaults.
+    cfg.settings.appearance = { ...appearanceDefaults, ...(rawSettings.appearance || {}) };
+    if (!Array.isArray(cfg.settings.categoryOrder)) cfg.settings.categoryOrder = [];
     // v1 stored a single `domainSuffix` string. Test the file rather than the
     // merged object, whose domainSuffixes is already populated by defaults().
     if (!Array.isArray(rawSettings.domainSuffixes) && typeof rawSettings.domainSuffix === 'string') {
@@ -93,6 +110,7 @@ function normalizeService(s) {
     host: String(s.host || '').trim(),
     port: Number(s.port) || 80,
     description: String(s.description || '').trim(),
+    category: String(s.category || '').trim().slice(0, 40),
     icon: String(s.icon || '').trim(),
     color: /^#[0-9a-fA-F]{6}$/.test(s.color || '') ? s.color : pickColor(s.name || s.hostname || ''),
     enabled: s.enabled !== false,
@@ -210,6 +228,17 @@ function hasKnownSuffix(host, cfg = load()) {
   return suffixes(cfg).some((suffix) => clean.endsWith(`.${suffix}`));
 }
 
+/**
+ * Categories in display order: the explicitly ordered ones first, then any
+ * others alphabetically, so a newly typed category still appears.
+ */
+function categories(cfg = load()) {
+  const used = new Set(cfg.services.map((s) => s.category).filter(Boolean));
+  const ordered = (cfg.settings.categoryOrder || []).filter((c) => used.has(c));
+  const rest = [...used].filter((c) => !ordered.includes(c)).sort((a, b) => a.localeCompare(b));
+  return [...ordered, ...rest];
+}
+
 function publicUrl(service, cfg = load()) {
   const port = cfg.settings.httpPort;
   const suffix = port === 80 ? '' : `:${port}`;
@@ -229,6 +258,7 @@ module.exports = {
   HOSTNAME_RE,
   suffixes,
   primarySuffix,
+  categories,
   allFqdns,
   allAdminFqdns,
   stripSuffix,

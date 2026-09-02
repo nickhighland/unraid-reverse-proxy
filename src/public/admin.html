@@ -107,6 +107,86 @@
     </div>
 
     <div class="panel">
+      <div class="panel-head">
+        <div><h2>Appearance</h2><p>How the dashboard looks. Changes apply to everyone who opens it.</p></div>
+      </div>
+
+      <div class="row">
+        <label class="field">
+          <span class="label">Accent colour</span>
+          <div class="color-row">
+            <input type="color" id="ap-accent">
+            <div class="swatches" id="ap-swatches"></div>
+          </div>
+        </label>
+        <label class="field">
+          <span class="label">Theme</span>
+          <select class="select" id="ap-theme">
+            <option value="auto">Match the device</option>
+            <option value="dark">Always dark</option>
+            <option value="light">Always light</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="row">
+        <label class="field">
+          <span class="label">Layout</span>
+          <select class="select" id="ap-layout">
+            <option value="grid">Tiles</option>
+            <option value="list">Rows</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="label">Density</span>
+          <select class="select" id="ap-density">
+            <option value="comfortable">Comfortable</option>
+            <option value="compact">Compact</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="label">Background</span>
+          <select class="select" id="ap-background">
+            <option value="aurora">Aurora</option>
+            <option value="mesh">Mesh</option>
+            <option value="plain">Plain</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="switch">
+        <input type="checkbox" id="ap-groupByCategory">
+        <span class="switch-text"><strong>Group by category</strong>
+          <small>Show tiles under collapsible category headings.</small></span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="ap-showStatus">
+        <span class="switch-text"><strong>Show status dots</strong>
+          <small>The live up/down indicator on each tile.</small></span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="ap-showHostnames">
+        <span class="switch-text"><strong>Show hostnames</strong>
+          <small>The <code>name.local</code> line under each title.</small></span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="ap-showDescriptions">
+        <span class="switch-text"><strong>Show descriptions</strong>
+          <small>The optional subtitle on each tile.</small></span>
+      </label>
+
+      <div class="panel-head" style="margin:22px 0 12px">
+        <div><h2 style="font-size:14px">Category order</h2>
+        <p>Drag to change the order groups appear on the dashboard.</p></div>
+      </div>
+      <div class="list" id="categoryOrder"></div>
+
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="saveAppearance" type="button">Save appearance</button>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head"><div><h2>Password</h2><p>Changing it signs out every other session.</p></div></div>
       <div class="notice" id="passwordNotice" hidden></div>
       <div class="row">

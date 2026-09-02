@@ -4,6 +4,7 @@ import {
 
 const state = {
   services: [],
+  categories: [],
   settings: {},
   system: null,
   suffix: 'local',
@@ -39,6 +40,7 @@ function serviceRow(service, index) {
     el('strong', { text: service.name }),
     service.enabled ? null : el('span', { class: 'badge off', text: 'disabled' }),
     service.showOnDashboard ? null : el('span', { class: 'badge', text: 'hidden' }),
+    service.category ? el('span', { class: 'badge', text: service.category }) : null,
   ]);
 
   const route = el('div', { class: 'item-route' }, [
@@ -172,6 +174,12 @@ function openModal(service) {
     class: 'input', id: 'f-port', type: 'number', min: '1', max: '65535', value: s.port, placeholder: '8080',
   });
   const descInput = el('input', { class: 'input', id: 'f-desc', value: s.description, placeholder: 'Optional subtitle' });
+  const categoryInput = el('input', {
+    class: 'input', id: 'f-category', value: s.category || '', list: 'categoryOptions',
+    placeholder: 'e.g. Media, Downloads, Tools',
+  });
+  const categoryList = el('datalist', { id: 'categoryOptions' },
+    state.categories.map((c) => el('option', { value: c })));
   const iconInput = el('input', { class: 'input', id: 'f-icon', value: s.icon, placeholder: 'https://…/icon.png' });
   const colorInput = el('input', { type: 'color', id: 'f-color', value: s.color });
 
@@ -293,7 +301,10 @@ function openModal(service) {
       el('div', { style: 'flex:0 0 110px' }, [field('Port', portInput)]),
     ]),
     el('div', { style: 'display:flex;align-items:center;gap:12px;margin:-4px 0 16px' }, [testBtn, testResult]),
-    field('Description', descInput),
+    el('div', { class: 'row' }, [
+      field('Description', descInput),
+      field('Category', el('div', {}, [categoryInput, categoryList]), 'Groups tiles on the dashboard.'),
+    ]),
     el('div', { class: 'row' }, [
       field('Icon', iconControl, 'Search the Unraid app library, upload your own, or paste a URL.'),
       el('div', { style: 'flex:0 0 130px' }, [
@@ -326,6 +337,7 @@ function openModal(service) {
       host: hostInput.value.trim(),
       port: Number(portInput.value),
       description: descInput.value.trim(),
+      category: categoryInput.value.trim(),
       icon: iconInput.value.trim(),
       color: colorInput.value,
       enabled: form.querySelector('#f-enabled').checked,
@@ -503,6 +515,8 @@ function fillSettings() {
   document.getElementById('dashboardRequiresLogin').checked = state.settings.dashboardRequiresLogin === true;
   draftSuffixes = [...(state.settings.domainSuffixes || ['local'])];
   renderSuffixes();
+  fillAppearance();
+  renderCategoryOrder();
 }
 
 document.getElementById('addSuffix').addEventListener('click', addSuffix);
@@ -588,6 +602,130 @@ document.getElementById('importFile').addEventListener('change', async (event) =
   }
 });
 
+// ---------- appearance ----------
+
+const ACCENTS = ['#4f8cff', '#7c5cff', '#22c1a4', '#f0883e', '#e06c75', '#c678dd', '#e5c07b', '#56b6c2'];
+const AP_SELECTS = ['theme', 'layout', 'density', 'background'];
+const AP_FLAGS = ['groupByCategory', 'showStatus', 'showHostnames', 'showDescriptions'];
+
+let categoryDraft = [];
+
+function fillAppearance() {
+  const a = state.settings.appearance || {};
+  document.getElementById('ap-accent').value = a.accent || '#4f8cff';
+  for (const key of AP_SELECTS) {
+    const node = document.getElementById(`ap-${key}`);
+    if (node) node.value = a[key] || node.options[0].value;
+  }
+  for (const flag of AP_FLAGS) {
+    const node = document.getElementById(`ap-${flag}`);
+    if (node) node.checked = a[flag] !== false;
+  }
+  renderSwatches();
+}
+
+function renderSwatches() {
+  const wrap = document.getElementById('ap-swatches');
+  if (!wrap) return;
+  const current = document.getElementById('ap-accent').value.toLowerCase();
+  wrap.replaceChildren(...ACCENTS.map((hex) => {
+    const b = el('button', {
+      class: `swatch${hex === current ? ' active' : ''}`, type: 'button',
+      style: `background:${hex}`, title: hex,
+    });
+    b.addEventListener('click', () => {
+      document.getElementById('ap-accent').value = hex;
+      renderSwatches();
+    });
+    return b;
+  }));
+}
+
+/** Drag-ordered list of the categories currently in use. */
+function renderCategoryOrder() {
+  const wrap = document.getElementById('categoryOrder');
+  if (!wrap) return;
+  const stored = state.settings.categoryOrder || [];
+  const used = state.categories;
+  categoryDraft = [...stored.filter((c) => used.includes(c)),
+    ...used.filter((c) => !stored.includes(c))];
+
+  wrap.replaceChildren();
+  if (!categoryDraft.length) {
+    wrap.appendChild(el('p', { class: 'hint', text: 'No categories yet — set one on a service to create it.' }));
+    return;
+  }
+
+  categoryDraft.forEach((name, index) => {
+    const count = state.services.filter((s) => s.category === name).length;
+    const row = el('div', {
+      class: 'item cat-row', draggable: 'true', 'data-index': String(index),
+    }, [
+      el('span', { class: 'grip', text: '⠿' }),
+      el('div', { class: 'item-main' }, [
+        el('div', { class: 'item-title' }, [el('strong', { text: name })]),
+        el('div', { class: 'item-route', text: `${count} service${count === 1 ? '' : 's'}` }),
+      ]),
+    ]);
+    attachCategoryDrag(row);
+    wrap.appendChild(row);
+  });
+}
+
+let catDragIndex = null;
+
+function attachCategoryDrag(row) {
+  row.addEventListener('dragstart', () => {
+    catDragIndex = Number(row.dataset.index);
+    row.classList.add('dragging');
+  });
+  row.addEventListener('dragend', () => {
+    catDragIndex = null;
+    row.classList.remove('dragging');
+    for (const r of row.parentElement.children) r.classList.remove('drop-target');
+  });
+  row.addEventListener('dragover', (event) => {
+    if (catDragIndex === null) return;
+    event.preventDefault();
+    row.classList.add('drop-target');
+  });
+  row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
+  row.addEventListener('drop', (event) => {
+    event.preventDefault();
+    row.classList.remove('drop-target');
+    const to = Number(row.dataset.index);
+    if (catDragIndex === null || catDragIndex === to) return;
+    const [moved] = categoryDraft.splice(catDragIndex, 1);
+    categoryDraft.splice(to, 0, moved);
+    state.settings.categoryOrder = categoryDraft;
+    renderCategoryOrder();
+  });
+}
+
+async function saveAppearance(event) {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const appearance = { accent: document.getElementById('ap-accent').value };
+    for (const key of AP_SELECTS) appearance[key] = document.getElementById(`ap-${key}`).value;
+    for (const flag of AP_FLAGS) appearance[flag] = document.getElementById(`ap-${flag}`).checked;
+
+    const result = await api('/api/settings', {
+      method: 'PUT',
+      body: { ...state.settings, appearance, categoryOrder: categoryDraft },
+    });
+    state.settings = result.settings;
+    toast('Appearance saved', 'ok');
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+document.getElementById('saveAppearance')?.addEventListener('click', saveAppearance);
+document.getElementById('ap-accent')?.addEventListener('input', renderSwatches);
+
 // ---------- system ----------
 
 function metaCard(label, value) {
@@ -669,7 +807,10 @@ document.getElementById('logout').addEventListener('click', async () => {
 async function loadServices() {
   const data = await api('/api/services');
   state.services = data.services || [];
+  state.categories = [...new Set(state.services.map((x) => x.category).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
   renderServices();
+  if (document.getElementById('categoryOrder')) renderCategoryOrder();
   document.getElementById('foot').textContent = `${state.services.length} service(s) configured`;
 }
 
