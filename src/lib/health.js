@@ -88,4 +88,27 @@ class HealthMonitor {
   }
 }
 
-module.exports = { HealthMonitor, probe };
+/**
+ * On Unraid, br0 is an ipvlan network, and an ipvlan container cannot reach its
+ * own host — so every service published on the host is invisible to it until a
+ * second network is attached. That failure looks like "everything is offline",
+ * which sends people hunting in the wrong place. Detect it explicitly.
+ */
+async function diagnoseHostReachability(services) {
+  const viaHost = services.filter((s) => /^172\.(1[6-9]|2\d|3[01])\.\d+\.1$/.test(s.host)
+    || /^(10|192)\./.test(s.host));
+  if (!viaHost.length) return { checked: 0, blocked: false };
+
+  const sample = viaHost.slice(0, 6);
+  const results = await Promise.all(sample.map((s) => probe(s.host, s.port, 2000)));
+  const reachable = results.filter((r) => r.up).length;
+
+  return {
+    checked: sample.length,
+    reachable,
+    // Nothing at all answering, across several different targets, is the signature.
+    blocked: sample.length >= 3 && reachable === 0,
+  };
+}
+
+module.exports = { HealthMonitor, probe, diagnoseHostReachability };

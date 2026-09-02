@@ -10,7 +10,7 @@ const proxy = require('./lib/proxy');
 const netinfo = require('./lib/netinfo');
 const { MdnsResponder } = require('./lib/mdns');
 const icons = require('./lib/icons');
-const { HealthMonitor } = require('./lib/health');
+const { HealthMonitor, diagnoseHostReachability } = require('./lib/health');
 const { handleApi } = require('./routes/api');
 const {
   sendJson, sendText, redirect, serveStatic, escapeHtml,
@@ -77,6 +77,20 @@ function refresh() {
   health.setInterval(current.settings.healthCheckSeconds);
 }
 
+let lastReachability = { checked: 0, blocked: false };
+
+async function checkReachability() {
+  try {
+    lastReachability = await diagnoseHostReachability(config.load().services.filter((s) => s.enabled));
+    if (lastReachability.blocked) {
+      logger.warn('[network] None of the upstream services are reachable from this container.');
+      logger.warn('[network] On Unraid this usually means it is on br0 (ipvlan), which cannot');
+      logger.warn('[network] reach its own host. Attach a second network once:');
+      logger.warn('[network]   docker network connect bridge unraid-reverse-proxy');
+    }
+  } catch { /* diagnostic only */ }
+}
+
 function systemInfo() {
   const current = config.load();
   return {
@@ -96,6 +110,7 @@ function systemInfo() {
       .filter((suffix) => suffix !== 'local')
       .map((suffix) => ({ record: `*.${suffix}`, target: netinfo.advertiseIp(current.settings) })),
     bridgeWarning: netinfo.looksLikeDockerBridge(netinfo.advertiseIp(current.settings)),
+    hostReachability: lastReachability,
     httpPort,
     configFile: config.CONFIG_FILE,
     uptimeSeconds: Math.round(process.uptime()),
@@ -277,6 +292,8 @@ server.listen(httpPort, () => {
   }
   refresh();
   health.start();
+  setTimeout(checkReachability, 4000);
+  setInterval(checkReachability, 300_000).unref();
 });
 
 let shuttingDown = false;
